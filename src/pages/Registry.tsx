@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
-import { Gift, ExternalLink, Check } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, orderBy, query, updateDoc, doc } from "firebase/firestore";
+import { toast } from "sonner";
+import { Gift, ExternalLink, Check } from "lucide-react";
 
 interface RegistryItem {
   id: string;
@@ -27,35 +28,31 @@ const Registry = () => {
   }, []);
 
   const fetchItems = async () => {
-    const { data, error } = await supabase
-      .from('gift_registry')
-      .select('*')
-      .order('created_at', { ascending: true });
+    const itemsRef = collection(db, "gift_registry");
+    const q = query(itemsRef, orderBy("created_at", "asc"));
+    const snap = await getDocs(q);
+    const data = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as RegistryItem[];
 
-    if (data && !error) {
-      setItems(data);
-    }
+    setItems(data);
     setLoading(false);
   };
 
   const handleReserve = async (itemId: string, isReserved: boolean) => {
     if (!user) {
-      toast.error('Please sign in to reserve gifts');
+      toast.error("Please sign in to reserve gifts");
       return;
     }
 
-    const { error } = await supabase
-      .from('gift_registry')
-      .update({
+    try {
+      await updateDoc(doc(db, "gift_registry", itemId), {
         reserved_by: isReserved ? null : user.id,
-      })
-      .eq('id', itemId);
+        updated_at: new Date().toISOString(),
+      });
 
-    if (error) {
-      toast.error('Failed to update reservation');
-    } else {
-      toast.success(isReserved ? 'Reservation removed' : 'Item reserved!');
+      toast.success(isReserved ? "Reservation removed" : "Item reserved!");
       fetchItems();
+    } catch {
+      toast.error("Failed to update reservation");
     }
   };
 
@@ -129,21 +126,17 @@ const Registry = () => {
                     )}
                     <CardContent className="pt-6 space-y-3">
                       <h3 className="font-serif font-bold">{item.item_name}</h3>
-                      
+
                       {item.description && (
                         <p className="text-sm text-muted-foreground">{item.description}</p>
                       )}
 
                       {item.price && (
-                        <p className="font-medium text-primary">
-                          ${item.price.toFixed(2)}
-                        </p>
+                        <p className="font-medium text-primary">${item.price.toFixed(2)}</p>
                       )}
 
                       {item.store_name && (
-                        <p className="text-sm text-muted-foreground">
-                          Store: {item.store_name}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Store: {item.store_name}</p>
                       )}
 
                       <div className="flex flex-col gap-2">
@@ -151,7 +144,7 @@ const Registry = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.open(item.store_url!, '_blank')}
+                            onClick={() => window.open(item.store_url!, "_blank")}
                           >
                             <ExternalLink className="w-4 h-4 mr-2" />
                             View Item
@@ -161,17 +154,17 @@ const Registry = () => {
                         {user && (
                           <Button
                             size="sm"
-                            variant={isReservedByUser ? 'secondary' : 'default'}
+                            variant={isReservedByUser ? "secondary" : "default"}
                             disabled={isReserved && !isReservedByUser}
                             onClick={() => handleReserve(item.id, isReservedByUser)}
                           >
                             {isReserved ? (
                               <>
                                 <Check className="w-4 h-4 mr-2" />
-                                {isReservedByUser ? 'Reserved by You' : 'Reserved'}
+                                {isReservedByUser ? "Reserved by You" : "Reserved"}
                               </>
                             ) : (
-                              'Reserve This Gift'
+                              "Reserve This Gift"
                             )}
                           </Button>
                         )}
@@ -194,8 +187,8 @@ const Registry = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Your generosity will help us start our new life together. Contributions can be
-              made via Venmo, Zelle, or check on the day of the wedding.
+              Your generosity will help us start our new life together. Contributions can be made
+              via Venmo, Zelle, or check on the day of the wedding.
             </p>
             <div className="flex gap-4">
               <Button variant="outline">

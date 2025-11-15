@@ -1,36 +1,73 @@
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Calendar, MapPin, Clock, Info } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { format } from 'date-fns';
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Calendar, MapPin, Clock, Info } from "lucide-react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
+import { format } from "date-fns";
 
-interface Event {
+type RawEvent = {
+  id: string;
+  title?: string;
+  description?: string | null;
+  // Legacy shape
+  event_date?: string;
+  venue_name?: string;
+  venue_address?: string;
+  dress_code?: string | null;
+  // New shape from Admin page
+  starts_at?: string;
+  location?: string;
+};
+
+type DisplayEvent = {
   id: string;
   title: string;
   description: string | null;
-  event_date: string;
-  venue_name: string;
-  venue_address: string;
-  venue_lat: number | null;
-  venue_lng: number | null;
-  dress_code: string | null;
-}
+  datetimeISO: string;
+  locationTitle?: string;
+  locationAddress?: string;
+  dressCode?: string | null;
+};
 
 const Events = () => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<DisplayEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchEvents = async () => {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true });
+      const snap = await getDocs(collection(db, "events"));
+      const rawList: RawEvent[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
 
-      if (data && !error) {
-        setEvents(data);
-      }
+      const normalized: DisplayEvent[] = rawList
+        .map((ev) => {
+          const datetimeISO = (ev.event_date as string) || (ev.starts_at as string) || "";
+          // locationTitle prefers explicit venue name; otherwise use the single-line location string
+          const locationTitle = ev.venue_name || ev.location || undefined;
+          // locationAddress prefers explicit venue address; fallback to same as title if only one string provided
+          const locationAddress = ev.venue_address || (ev.location && !ev.venue_name ? ev.location : undefined);
+          const title = ev.title ?? "Untitled Event";
+          const description = (ev.description ?? null) as string | null;
+          const dressCode = (ev.dress_code ?? null) as string | null;
+          return {
+            id: ev.id,
+            title,
+            description,
+            datetimeISO,
+            locationTitle,
+            locationAddress,
+            dressCode,
+          } as DisplayEvent;
+        })
+        .filter((e) => !!e.datetimeISO);
+
+      normalized.sort((a, b) => {
+        const da = new Date(a.datetimeISO).getTime();
+        const db = new Date(b.datetimeISO).getTime();
+        return da - db;
+      });
+
+      setEvents(normalized);
       setLoading(false);
     };
 
@@ -39,7 +76,7 @@ const Events = () => {
 
   const openMaps = (address: string) => {
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-    window.open(mapsUrl, '_blank');
+    window.open(mapsUrl, "_blank");
   };
 
   if (loading) {
@@ -55,9 +92,7 @@ const Events = () => {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-serif font-bold mb-4">Wedding Events</h1>
-          <p className="text-xl text-muted-foreground">
-            Join us for these special celebrations
-          </p>
+          <p className="text-xl text-muted-foreground">Join us for these special celebrations</p>
         </div>
 
         {events.length === 0 ? (
@@ -73,7 +108,7 @@ const Events = () => {
                 <CardHeader className="bg-gradient-primary text-primary-foreground">
                   <CardTitle className="text-2xl font-serif">{event.title}</CardTitle>
                   <CardDescription className="text-primary-foreground/90">
-                    {format(new Date(event.event_date), 'EEEE, MMMM dd, yyyy')}
+                    {format(new Date(event.datetimeISO), "EEEE, MMMM dd, yyyy")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 space-y-4">
@@ -87,29 +122,42 @@ const Events = () => {
                   <div className="flex items-start gap-3">
                     <Clock className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                     <span className="font-medium">
-                      {format(new Date(event.event_date), 'h:mm a')}
+                      {format(new Date(event.datetimeISO), "h:mm a")}
                     </span>
                   </div>
 
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="font-medium">{event.venue_name}</p>
-                      <p className="text-sm text-muted-foreground">{event.venue_address}</p>
-                      <Button
-                        variant="link"
-                        className="px-0 h-auto"
-                        onClick={() => openMaps(event.venue_address)}
-                      >
-                        Open in Maps
-                      </Button>
+                      {event.locationTitle && <p className="font-medium">{event.locationTitle}</p>}
+                      {event.locationAddress && (
+                        <>
+                          <p className="text-sm text-muted-foreground">{event.locationAddress}</p>
+                          <Button
+                            variant="link"
+                            className="px-0 h-auto"
+                            onClick={() => openMaps(event.locationAddress!)}
+                          >
+                            Open in Maps
+                          </Button>
+                        </>
+                      )}
+                      {!event.locationAddress && event.locationTitle && (
+                        <Button
+                          variant="link"
+                          className="px-0 h-auto"
+                          onClick={() => openMaps(event.locationTitle!)}
+                        >
+                          Open in Maps
+                        </Button>
+                      )}
                     </div>
                   </div>
 
-                  {event.dress_code && (
+                  {event.dressCode && (
                     <div className="pt-4 border-t">
                       <p className="text-sm font-medium text-muted-foreground">DRESS CODE</p>
-                      <p className="mt-1">{event.dress_code}</p>
+                      <p className="mt-1">{event.dressCode}</p>
                     </div>
                   )}
                 </CardContent>

@@ -14,6 +14,7 @@ import Guestbook from "./pages/Guestbook";
 import Travel from "./pages/Travel";
 import Registry from "./pages/Registry";
 import Admin from "./pages/Admin";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/events" element={<Events />} />
               <Route path="/rsvp" element={<RSVP />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/guestbook" element={<Guestbook />} />
               <Route path="/travel" element={<Travel />} />

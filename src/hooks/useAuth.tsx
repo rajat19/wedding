@@ -1,11 +1,12 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase, isAdmin } from '@/lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { isAdmin as checkIsAdmin, signOut as signOutFn } from "@/lib/firebase";
+import { useNavigate } from "react-router-dom";
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: { id: string; email: string | null } | null;
+  session: FirebaseUser | null;
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -22,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 };
@@ -32,52 +33,35 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
+  const [session, setSession] = useState<FirebaseUser | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Check admin status asynchronously
-        if (session?.user) {
-          setTimeout(() => {
-            isAdmin(session.user.id).then(setIsAdminUser);
-          }, 0);
-        } else {
-          setIsAdminUser(false);
-        }
-        
-        setLoading(false);
-      }
-    );
-
-    // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        isAdmin(session.user.id).then(setIsAdminUser);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setSession(firebaseUser ?? null);
+      if (firebaseUser) {
+        const adapted = { id: firebaseUser.uid, email: firebaseUser.email ?? null };
+        setUser(adapted);
+        checkIsAdmin(firebaseUser.uid).then(setIsAdminUser);
+      } else {
+        setUser(null);
+        setIsAdminUser(false);
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutFn();
     setUser(null);
     setSession(null);
     setIsAdminUser(false);
-    navigate('/auth');
+    navigate("/auth");
   };
 
   return (

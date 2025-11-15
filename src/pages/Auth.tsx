@@ -1,69 +1,58 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { signIn, signUp } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
-import { Heart } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { signInWithGoogle, getProfile } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import { Heart } from "lucide-react";
 
 const Auth = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate("/");
     }
   }, [user, navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogle = async () => {
     setLoading(true);
-
     try {
-      if (isSignUp) {
-        if (!fullName.trim()) {
-          toast.error('Please enter your full name');
-          setLoading(false);
-          return;
-        }
-
-        const { error } = await signUp(email, password, fullName);
-        
-        if (error) {
-          if (error.message.includes('already registered')) {
-            toast.error('This email is already registered. Please sign in instead.');
-          } else {
-            toast.error(error.message);
-          }
-        } else {
-          toast.success('Account created successfully! You can now sign in.');
-          setIsSignUp(false);
-        }
+      const { error } = await signInWithGoogle();
+      if (error) {
+        toast.error(error.message);
       } else {
-        const { error } = await signIn(email, password);
-        
-        if (error) {
-          if (error.message.includes('Invalid')) {
-            toast.error('Invalid email or password');
+        toast.success("Signed in with Google!");
+        // If profile missing side/relationship, route to profile page
+        setTimeout(async () => {
+          const authUser = window?.localStorage ? null : null; // placeholder to avoid TS strip
+          // Fetch current user profile via auth state in provider
+          // Small delay allows AuthProvider to update state
+          const profileUser = await new Promise<ReturnType<typeof getProfile>>(async (resolve) => {
+            // We don't have direct access to auth user here; rely on provider state soon after
+            setTimeout(async () => {
+              // Try reading from Firebase auth directly
+              const u = (await import("firebase/auth")).getAuth().currentUser;
+              if (u?.uid) {
+                resolve(getProfile(u.uid));
+              } else {
+                resolve(null as any);
+              }
+            }, 50);
+          });
+          const prof = (await profileUser) as any;
+          if (!prof || !prof.side || !prof.relationship) {
+            navigate("/profile");
           } else {
-            toast.error(error.message);
+            navigate("/");
           }
-        } else {
-          toast.success('Signed in successfully!');
-          navigate('/');
-        }
+        }, 50);
       }
-    } catch (error) {
-      toast.error('An unexpected error occurred');
+    } catch {
+      toast.error("Google sign-in failed");
     } finally {
       setLoading(false);
     }
@@ -78,72 +67,15 @@ const Auth = () => {
               <Heart className="w-8 h-8 text-primary fill-primary" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-serif">
-            {isSignUp ? 'Join Us' : 'Welcome Back'}
-          </CardTitle>
-          <CardDescription>
-            {isSignUp
-              ? 'Create an account to RSVP and access wedding details'
-              : 'Sign in to view our wedding details'}
-          </CardDescription>
+          <CardTitle className="text-3xl font-serif">Welcome</CardTitle>
+          <CardDescription>Sign in to view our wedding details</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="John Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required={isSignUp}
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
+          <div className="space-y-4">
+            <Button onClick={handleGoogle} className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Continue with Google"}
             </Button>
-
-            <div className="text-center text-sm">
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-primary hover:underline"
-              >
-                {isSignUp
-                  ? 'Already have an account? Sign in'
-                  : "Don't have an account? Sign up"}
-              </button>
-            </div>
-          </form>
+          </div>
         </CardContent>
       </Card>
     </div>
