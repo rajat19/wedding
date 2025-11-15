@@ -177,6 +177,39 @@ Storage:
 
 ---
 
+### Deploy (GitHub Pages via Actions)
+
+This repo is configured to deploy automatically to GitHub Pages using GitHub Actions.
+
+1) Set the correct base path (already set to `/wedding/`):
+- See `vite.config.ts` → `base: mode === "production" ? "/wedding/" : "/"`.
+- If your repository name changes, update this to `"/<your-repo>/"`.
+
+2) Deep-link support for SPA routes:
+- `public/404.html` and an inline script in `index.html` are included to support direct links (e.g., `/wedding/rsvp`).
+
+3) Workflow
+- A workflow is created at `.github/workflows/deploy.yml`.
+- It builds the app and publishes the `dist/` folder to GitHub Pages.
+
+4) Enable Pages in GitHub
+- In your repository: Settings → Pages → Source: select “GitHub Actions”.
+- After the first successful run on `main`, your site will be available at:
+  - `https://<your-username>.github.io/wedding/`
+
+5) Trigger a deploy
+```bash
+git add .
+git commit -m "Deploy to GitHub Pages"
+git push origin main
+```
+
+Notes:
+- If you rename the repo, update `vite.config.ts` base and, optionally, the fallback meta refresh in `public/404.html`.
+- For custom domains, configure a CNAME in GitHub Pages settings (and DNS) and add a `CNAME` file in `public/` if desired.
+
+---
+
 ### Acknowledgements
 - [shadcn/ui](https://ui.shadcn.com) and Radix UI
 - Vite, Tailwind CSS, React ecosystem

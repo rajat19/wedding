@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Page Not Found</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      // Single Page Apps for GitHub Pages
+      // https://github.com/rafgraph/spa-github-pages
+      (function () {
+        // Number of path segments to keep after the domain.
+        // For project pages at /<user>/<repo>/..., keep 1 segment ("wedding").
+        var segmentCount = 1;
+        var l = window.location;
+        var repoBase = l.pathname.split("/").slice(0, 1 + segmentCount).join("/");
+        l.replace(
+          l.protocol +
+            "//" +
+            l.hostname +
+            (l.port ? ":" + l.port : "") +
+            repoBase +
+            "/?/" +
+            l.pathname
+              .slice(1)
+              .split("/")
+              .slice(segmentCount)
+              .join("/") +
+            (l.search ? "&" + l.search.slice(1) : "") +
+            l.hash,
+        );
+      })();
+    </script>
+    <noscript>
+      <meta http-equiv="refresh" content="0; url=/wedding/" />
+    </noscript>
+  </head>
+  <body></body>
+  </html>
+
+
